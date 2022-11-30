@@ -24,14 +24,15 @@
         <!-- 顶栏右侧 -->
         <div class="d2-header-right" flex-box="0">
           <!-- 如果你只想在开发环境显示这个按钮请添加 v-if="$env === 'development'" -->
-          <d2-header-search @click="handleSearchClick"/>
-          <d2-header-log/>
-          <d2-header-fullscreen/>
-          <d2-header-theme/>
-          <d2-header-size/>
-          <d2-header-locales/>
-          <d2-header-color/>
-          <d2-header-user/>
+          <!-- 如果你不想展示按钮，注释即可 -->
+          <d2-header-search @click="handleSearchClick"/>  <!-- 搜索页面 -->
+          <d2-header-log/>                                <!-- 日志 -->
+          <d2-header-fullscreen/>                         <!-- 全屏 -->
+          <d2-header-theme/>                              <!-- 主题选择 -->
+          <d2-header-size/>                               <!-- 字体大小 -->
+          <d2-header-locales/>                            <!-- 语言选择 -->
+          <d2-header-color/>                              <!-- 主题颜色 -->
+          <d2-header-user/>                               <!-- 用户信息 -->
         </div>
       </div>
       <!-- 下面 主体 -->
