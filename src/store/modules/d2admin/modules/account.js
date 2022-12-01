@@ -1,7 +1,8 @@
 import { Message, MessageBox } from 'element-ui'
 import util from '@/libs/util.js'
 import router from '@/router'
-import api from '@/api'
+import store from '@/store'
+import { SYS_USER_LOGIN, SYS_USER_LOGOUT } from '@/views/system/login/api'
 
 export default {
   namespaced: true,
@@ -17,16 +18,28 @@ export default {
       username = '',
       password = ''
     } = {}) {
-      const res = await api.SYS_USER_LOGIN({ username, password })
+      let res = await SYS_USER_LOGIN({
+        username,
+        password
+      })
       // 设置 cookie 一定要存 uuid 和 token 两个 cookie
       // 整个系统依赖这两个数据进行校验和存储
       // uuid 是用户身份唯一标识 用户注册的时候确定 并且不可改变 不可重复
       // token 代表用户当前登录状态 建议在网络请求中携带 token
       // 如有必要 token 需要定时更新，默认保存一天
-      util.cookies.set('uuid', res.uuid)
-      util.cookies.set('token', res.token)
+      res = res.data
+      util.cookies.set('uuid', res.userId)
+      util.cookies.set('name', res.name)
+      util.cookies.set('token', res.access)
+      util.cookies.set('refresh', res.refresh)
       // 设置 vuex 用户信息
-      await dispatch('d2admin/user/set', { name: res.name }, { root: true })
+      await dispatch('d2admin/user/set', {
+        name: res.name,
+        user_id: res.userId,
+        avatar: res.avatar,
+        role_info: res.role_info,
+        dept_info: res.dept_info
+      }, { root: true })
       // 用户登录后从持久化数据加载一系列的设置
       await dispatch('load')
     },
@@ -35,19 +48,30 @@ export default {
      * @param {Object} context
      * @param {Object} payload confirm {Boolean} 是否需要确认
      */
-    logout ({ commit, dispatch }, { confirm = false } = {}) {
+    logout ({
+      commit,
+      dispatch
+    }, { confirm = false } = {}) {
       /**
        * @description 注销
        */
       async function logout () {
-        // 删除cookie
-        util.cookies.remove('token')
-        util.cookies.remove('uuid')
+        await SYS_USER_LOGOUT({ refresh: util.cookies.get('refresh') }).then(() => {
+          // 删除cookie
+          util.cookies.remove('token')
+          util.cookies.remove('uuid')
+          util.cookies.remove('refresh')
+          util.cookies.remove('name')
+        })
         // 清空 vuex 用户信息
         await dispatch('d2admin/user/set', {}, { root: true })
+        store.commit('d2admin/menu/asideSet', []) // 设置侧边栏菜单
+        store.commit('d2admin/search/init', []) // 设置搜索
+        sessionStorage.removeItem('menuData')
         // 跳转路由
         router.push({ name: 'login' })
       }
+
       // 判断是否需要确认
       if (confirm) {
         commit('d2admin/gray/set', true, { root: true })

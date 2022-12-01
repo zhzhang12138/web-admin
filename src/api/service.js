@@ -4,6 +4,34 @@ import { get } from 'lodash'
 import util from '@/libs/util'
 import { errorLog, errorCreate } from './tools'
 import qs from 'qs'
+import router from '@/router'
+
+export function getErrorMessage (msg) {
+  if (typeof msg === 'string') {
+    return msg
+  }
+  if (typeof msg === 'object') {
+    if (msg.code === 'token_not_valid') {
+      util.cookies.remove('token')
+      util.cookies.remove('uuid')
+      router.push({ path: '/login' })
+      router.go(0)
+      return '登录超时，请重新登录！'
+    }
+    if (msg.code === 'user_not_found') {
+      util.cookies.remove('token')
+      util.cookies.remove('uuid')
+      router.push({ path: '/login' })
+      router.go(0)
+      return '用户无效，请重新登录！'
+    }
+    return Object.values(msg)
+  }
+  if (Object.prototype.toString.call(msg).slice(8, -1) === 'Array') {
+    return msg
+  }
+  return msg
+}
 
 /**
  * @description 创建请求实例
@@ -47,6 +75,15 @@ function createService () {
             // TODO 可能结果还需要code和msg进行后续处理，所以去掉.data返回全部结果
             // return dataAxios.data
             return dataAxios
+          case 401:
+            // TODO 置换token 未完善
+            util.cookies.remove('token')
+            util.cookies.remove('uuid')
+            util.cookies.remove('name')
+            util.cookies.remove('refresh')
+            router.push({ path: '/login' })
+            errorCreate(`${getErrorMessage(dataAxios.msg)}`)
+            break
           case 'xxx':
             // [ 示例 ] 其它和后台约定的 code
             errorCreate(`[ code: xxx ] ${dataAxios.msg}: ${response.config.url}`)
@@ -111,14 +148,25 @@ function createService () {
 function createRequestFunction (service) {
   return function (config) {
     const token = util.cookies.get('token')
+    // 进行布尔值兼容
+    var params = get(config, 'params', {})
+    for (const key of Object.keys(params)) {
+      if (String(params[key]) === 'true') {
+        params[key] = 1
+      }
+      if (String(params[key]) === 'false') {
+        params[key] = 0
+      }
+    }
     const configDefault = {
       headers: {
-        Authorization: token,
+        Authorization: 'JWT ' + token,
         'Content-Type': get(config, 'headers.Content-Type', 'application/json')
       },
-      timeout: 5000,
-      baseURL: process.env.VUE_APP_API,
-      data: {}
+      timeout: 60000,
+      baseURL: util.baseURL(),
+      data: {},
+      params: params
     }
     return service(Object.assign(configDefault, config))
   }

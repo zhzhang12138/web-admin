@@ -10,6 +10,7 @@ import util from '@/libs/util.js'
 
 // 路由数据
 import routes from './routes'
+import { request } from '@/api/service'
 
 // fix vue-router NavigationDuplicated
 const VueRouterPush = VueRouter.prototype.push
@@ -47,6 +48,22 @@ router.beforeEach(async (to, from, next) => {
     // 请根据自身业务需要修改
     const token = util.cookies.get('token')
     if (token && token !== 'undefined') {
+      if (!store.state.d2admin.user.info.name) {
+        const res = await request({
+          url: '/api/system/user/user_info/',
+          method: 'get',
+          params: {}
+        })
+        await store.dispatch('d2admin/user/set', {
+          name: res.data.name,
+          user_id: res.data.id,
+          avatar: res.data.avatar,
+          role_info: res.data.role_info,
+          dept_info: res.data.dept_info,
+          is_superuser: res.data.is_superuser
+        }, { root: true })
+        await store.dispatch('d2admin/account/load')
+      }
       next()
     } else {
       // 没有登录的时候跳转到登录界面
