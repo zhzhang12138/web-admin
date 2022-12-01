@@ -64,6 +64,11 @@ router.beforeEach(async (to, from, next) => {
         }, { root: true })
         await store.dispatch('d2admin/account/load')
       }
+      if (!store.state.d2admin.menu || store.state.d2admin.menu.aside.length === 0) {
+        // 登出的时候将侧边栏菜单置为空了，此处需要重写初始化菜单
+        // 防止不同用户登录时造成初始化菜单冲突
+        console.log('需要初始化菜单')
+      }
       next()
     } else {
       // 没有登录的时候跳转到登录界面
