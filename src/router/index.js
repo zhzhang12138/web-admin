@@ -1,6 +1,9 @@
 import Vue from 'vue'
 import VueRouter from 'vue-router'
 
+// 菜单
+import { getMenu, handleAsideMenu, handleRouter, checkRouter } from '@/menu'
+
 // 进度条
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
@@ -34,6 +37,8 @@ const router = new VueRouter({
  * 权限验证
  */
 router.beforeEach(async (to, from, next) => {
+  // 白名单
+  const whiteList = ['/login', '/auth-redirect', '/bind', '/register', '/oauth2']
   // 确认已经加载多标签页数据 https://github.com/d2-projects/d2-admin/issues/201
   await store.dispatch('d2admin/page/isLoaded')
   // 确认已经加载组件尺寸设置 https://github.com/d2-projects/d2-admin/issues/198
@@ -43,48 +48,78 @@ router.beforeEach(async (to, from, next) => {
   // 关闭搜索面板
   store.commit('d2admin/search/set', false)
   // 验证当前路由所有的匹配中是否需要有登录验证的
-  if (to.matched.some(r => r.meta.auth)) {
-    // 这里暂时将cookie里是否存有token作为验证是否登录的条件
-    // 请根据自身业务需要修改
-    const token = util.cookies.get('token')
-    if (token && token !== 'undefined') {
-      if (!store.state.d2admin.user.info.name) {
-        const res = await request({
-          url: '/api/system/user/user_info/',
-          method: 'get',
-          params: {}
+  // 这里暂时将cookie里是否存有token作为验证是否登录的条件
+  // 请根据自身业务需要修改
+  const token = util.cookies.get('token')
+  if (token && token !== 'undefined') {
+    if (!store.state.d2admin.user.info.name) {
+      const res = await request({
+        url: '/api/system/user/user_info/',
+        method: 'get',
+        params: {}
+      })
+      await store.dispatch('d2admin/user/set', {
+        name: res.data.name,
+        user_id: res.data.id,
+        avatar: res.data.avatar,
+        role_info: res.data.role_info,
+        dept_info: res.data.dept_info,
+        is_superuser: res.data.is_superuser
+      }, { root: true })
+      await store.dispatch('d2admin/account/load')
+    }
+    if (!store.state.d2admin.menu || store.state.d2admin.menu.aside.length === 0) {
+      // 登出的时候将侧边栏菜单置为空了，此处需要重写初始化菜单
+      // 防止不同用户登录时造成初始化菜单冲突
+      console.log('需要初始化菜单')
+      // 动态添加路由
+      getMenu().then(ret => {
+        // 校验路由是否有效
+        ret = checkRouter(ret)
+        const routes = handleRouter(ret)
+        // 处理路由 得到每一级的路由设置
+        store.commit('d2admin/page/init', routes)
+        router.addRoutes(routes)
+        // routes.forEach(route => router.addRoute(route))
+
+        const menu = handleAsideMenu(ret)
+        const aside = handleAsideMenu(ret.filter(value => value.visible === true))
+        store.commit('d2admin/menu/asideSet', aside) // 设置侧边栏菜单
+        store.commit('d2admin/search/init', menu) // 设置搜索
+        next({
+          path: to.fullPath,
+          replace: false,
+          params: to.params
         })
-        await store.dispatch('d2admin/user/set', {
-          name: res.data.name,
-          user_id: res.data.id,
-          avatar: res.data.avatar,
-          role_info: res.data.role_info,
-          dept_info: res.data.dept_info,
-          is_superuser: res.data.is_superuser
-        }, { root: true })
-        await store.dispatch('d2admin/account/load')
+      })
+    } else {
+      next()
+      const childrenPath = window.qiankunActiveRule || []
+      if (to.name) {
+        // 有 name 属性，说明是主应用的路由
+        next()
+      } else if (childrenPath.some((item) => to.path.includes(item))) {
+        next()
+      } else {
+        next({ name: '404' })
       }
-      if (!store.state.d2admin.menu || store.state.d2admin.menu.aside.length === 0) {
-        // 登出的时候将侧边栏菜单置为空了，此处需要重写初始化菜单
-        // 防止不同用户登录时造成初始化菜单冲突
-        console.log('需要初始化菜单')
-      }
+    }
+  } else {
+    // 没有登录的时候跳转到登录界面
+    // 携带上登陆成功之后需要跳转的页面完整路径
+    // https://github.com/d2-projects/d2-admin/issues/138
+    if (whiteList.indexOf(to.path) !== -1) {
+      // 在免登录白名单，直接进入
       next()
     } else {
-      // 没有登录的时候跳转到登录界面
-      // 携带上登陆成功之后需要跳转的页面完整路径
       next({
         name: 'login',
         query: {
           redirect: to.fullPath
         }
       })
-      // https://github.com/d2-projects/d2-admin/issues/138
       NProgress.done()
     }
-  } else {
-    // 不需要身份校验 直接通过
-    next()
   }
 })
 
